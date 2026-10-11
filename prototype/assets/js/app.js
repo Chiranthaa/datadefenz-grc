@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  const SCF_URL = "scf-2026.3-eight-frameworks.json";
+  const SCF_URL = "../data/scf/scf-2026.3-eight-frameworks.json";
   const PAGE_SIZE = 50;
 
   // UI colours per framework group (presentation only).

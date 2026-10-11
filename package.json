@@ -1,0 +1,32 @@
+{
+  "name": "datadefenz-grc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "scf:import": "node --env-file=.env.local scripts/import-scf.mjs",
+    "seed:test": "node --env-file=.env.local scripts/seed-test-data.mjs",
+    "verify:isolation": "node --env-file=.env.local scripts/verify-isolation.mjs",
+    "test:rls-local": "bash supabase/tests/local/run.sh"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
+    "next": "^16.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}

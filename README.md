@@ -2,68 +2,81 @@
 
 Internal GRC platform for DATADEFENZ consulting work.
 
-> **Status: prototype.** Controls and framework mappings come from the Secure
-> Controls Framework (SCF) 2026.3. Assessment status, owners and evidence are
-> **demo values** for a fictional organisation. There is no login and no
-> customer data.
+> **Status: multi-tenant foundation (not deployed).** Next.js + Supabase Auth,
+> PostgreSQL with Row Level Security, and private Storage. Use a
+> development/test Supabase project with the **fictional** test data only.
+> The public GitHub Pages site of the earlier static prototype is not
+> suitable for client data.
 
-## What's in the prototype
+## What this foundation includes
 
-- **Dashboard** – SCF catalogue figures (controls, mapping references, coverage
-  per framework group, controls per SCF domain) and a separately labelled demo
-  assessment section (status breakdown, priority gaps).
-- **Unified controls** – each of the 1,028 SCF controls is listed once. Filter
-  by the eight framework groups defined in the SCF file (ISO/IEC 27001, NIST SP
-  800-53, IEC 62443, NIST SP 800-82, SOC 2, NIS2, EU AI Act, GDPR), by SCF
-  domain, by demo status, or by free-text search. Expand a control to see its
-  SCF description and control question, its framework mappings, and its demo
-  assessment and evidence notes. Filters are kept in the URL.
+- **Authentication** — email/password sign-in, sign-out and password reset
+  (Supabase Auth, cookie sessions via `@supabase/ssr`). No public sign-up.
+- **Organisations (tenants)** with **memberships and roles**: platform owner
+  (DATADEFENZ), customer admin, assessor, read-only.
+- **Row Level Security** isolating every customer-specific record and
+  evidence file by organisation.
+- **Shared SCF 2026.3 control library** — read-only for everyone, loaded
+  verbatim from `data/scf/scf-2026.3-eight-frameworks.json`, with SCF
+  attribution and license links on every signed-in page.
+- Minimal screens: organisations, organisation detail, member management,
+  platform admin (create organisations), SCF library browser.
 
-## Preview locally
+## Getting started
 
-No build step or dependencies. The app loads the SCF JSON file at runtime, so
-it must be served over HTTP (browsers block this when `index.html` is opened
-directly from disk). From the repository root:
+Follow **[docs/SETUP.md](docs/SETUP.md)**. In short:
 
 ```sh
-python3 -m http.server 8000
+cp .env.example .env.local      # fill in from your Supabase project — never commit it
+npm install
+# apply supabase/migrations/*.sql to your project (SQL editor or `supabase db push`)
+npm run scf:import
+npm run seed:test
+npm run verify:isolation
+npm run dev
 ```
-
-then visit <http://localhost:8000>.
 
 ## Project structure
 
 ```
-index.html                        App shell: navigation, demo banner, SCF attribution footer
-scf-2026.3-eight-frameworks.json  SCF controls and mappings (source data, unmodified)
-assets/js/app.js                  Loads the SCF file; routing and rendering
-assets/js/demo-assessment.js      DEMO status, owners and evidence, keyed by SCF control ID
-assets/css/styles.css             Styles (light/dark mode, responsive)
+app/                         Next.js App Router pages, server actions, auth routes
+  (app)/                     Signed-in area (organisations, members, admin, SCF library)
+  login/ forgot-password/    Public auth pages
+  auth/confirm/ auth/signout Email-link handler, POST-only sign-out
+components/                  Shared UI (notices, submit button, SCF attribution)
+lib/                         Supabase clients, auth helpers, env, messages
+proxy.ts                     Session refresh + redirect to /login (Next.js 16 proxy)
+supabase/migrations/         Database schema, RLS policies, storage bucket
+supabase/tests/local/        RLS isolation tests on a throwaway local PostgreSQL
+scripts/                     Local-only tools: SCF import, test seed, isolation check
+data/scf/                    SCF 2026.3 source file (unmodified)
+docs/                        Setup guide and security model
+prototype/                   Earlier static prototype (demo values only), kept for reference
 ```
 
-## Data sources
+## Security
 
-**Secure Controls Framework (SCF) 2026.3** —
-<https://securecontrolsframework.com>, licensed under
-[CC BY-ND 4.0](https://creativecommons.org/licenses/by-nd/4.0/); see also the
-[SCF license terms](https://securecontrolsframework.com/commercial-license).
+See **[docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md)** for the role matrix,
+how isolation is enforced, how to verify it, and the known limits.
 
-- SCF control IDs, names, descriptions, control questions and mapping
-  identifiers are displayed exactly as they appear in
-  `scf-2026.3-eight-frameworks.json`. The app does not edit or add to them.
-- The file is a filtered selection of SCF controls mapped to the eight
-  framework groups. Framework groups and their source framework names are taken
-  from the file's `framework_groups`.
-- The attribution and license links appear in the footer of every page and must
-  stay wherever this content is displayed or shared.
+- Credentials live only in `.env.local` (git-ignored).
+- The app uses only the publishable/anon key; the secret/service-role key is
+  used solely by local scripts.
 
-**Demo assessment values** — `assets/js/demo-assessment.js` holds invented
-status, owner, date, assessor-note and evidence values for 21 SCF controls of a
-fictional engagement. They are marked "Demo" throughout the UI. All other
-controls show as "Not assessed".
+## Scripts
 
-## Next steps
+| Command | What it does |
+|---|---|
+| `npm run dev` / `build` / `start` | Next.js development server / production build / serve |
+| `npm run typecheck` | TypeScript check |
+| `npm run scf:import` | Load the SCF library into Supabase (secret key, local) |
+| `npm run seed:test` | Create fictional test users, organisations and records (test projects only) |
+| `npm run verify:isolation` | Check cross-organisation isolation against your project via the public API |
+| `npm run test:rls-local` | Run the RLS test suite on a local PostgreSQL (no Supabase needed) |
 
-1. Decide where real assessments and evidence live (per engagement) before any
-   client data goes into the tool.
-2. Add authentication and controlled hosting only once that is agreed.
+## SCF attribution
+
+Control content: [Secure Controls Framework (SCF)](https://securecontrolsframework.com)
+2026.3, licensed under [CC BY-ND 4.0](https://creativecommons.org/licenses/by-nd/4.0/).
+See also the [SCF license terms](https://securecontrolsframework.com/commercial-license).
+SCF control text and mapping identifiers are stored and displayed verbatim.
