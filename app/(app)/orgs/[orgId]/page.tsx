@@ -1,104 +1,154 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { isPlatformOwner, requireUser, roleIn, ROLE_LABELS, UUID_RE, type OrgRole } from "@/lib/auth";
+import { Disclaimer, OrgTabs } from "@/components/OrgTabs";
+import { DISCLAIMER, getOrgContext, pct } from "@/lib/compliance";
 
-const STATUS_LABELS: Record<string, string> = {
-  not_assessed: "Not assessed",
-  implemented: "Implemented",
-  partially_implemented: "Partially implemented",
-  not_implemented: "Not implemented",
-  not_applicable: "Not applicable"
+type GroupStats = {
+  group_id: string; total: number; implemented: number; partial: number; not_implemented: number;
+  not_applicable: number; not_assessed: number; evidence_missing: number;
+};
+type Dashboard = {
+  total: number;
+  status: Record<"implemented" | "partially_implemented" | "not_implemented" | "not_applicable" | "not_assessed", number>;
+  evidence: { needs_evidence: number; provided: number; partially_provided: number; not_provided: number };
+  framework_specific: number;
+  groups: GroupStats[];
 };
 
-export default async function OrganisationPage({ params }: { params: Promise<{ orgId: string }> }) {
+const SEGMENTS = [
+  ["implemented", "Implemented"],
+  ["partially_implemented", "Partially implemented"],
+  ["not_implemented", "Not implemented"],
+  ["not_applicable", "Not applicable"],
+  ["not_assessed", "Not assessed"]
+] as const;
+
+export default async function OrganisationDashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
-  if (!UUID_RE.test(orgId)) notFound();
+  const ctx = await getOrgContext(orgId);
+  const { supabase, org, groupById } = ctx;
 
-  const { supabase, user } = await requireUser();
-  // RLS: returns nothing for organisations the user does not belong to.
-  const { data: org } = await supabase.from("organisations").select("id, name, slug").eq("id", orgId).maybeSingle();
-  if (!org) notFound();
-
-  const [role, owner, members, assessments, evidence] = await Promise.all([
-    roleIn(supabase, orgId, user.id),
-    isPlatformOwner(supabase, user.id),
-    supabase.from("memberships").select("id, role, profiles(email, full_name)").eq("organisation_id", orgId),
+  const [{ data }, { data: recent }] = await Promise.all([
+    supabase.rpc("org_dashboard", { p_organisation_id: orgId }),
     supabase
       .from("control_assessments")
-      .select("id, scf_id, status, owner_name, notes, assessed_on, scf_controls(scf_control_name)")
+      .select("scf_id, status, evidence_status, updated_at, scf_controls(scf_control_name)")
       .eq("organisation_id", orgId)
-      .order("scf_id"),
-    supabase.from("evidence_items").select("id, title, storage_path, created_at").eq("organisation_id", orgId).order("created_at")
+      .order("updated_at", { ascending: false })
+      .limit(5)
   ]);
-  const canManage = owner || role === "customer_admin";
+  const d = data as Dashboard | null;
+  const req = (q: string) => `/orgs/${orgId}/requirements?${q}`;
+
+  if (!d || ctx.selected.size === 0) {
+    return (
+      <>
+        <OrgTabs orgId={orgId} orgName={org.name} active="overview" showMembers={ctx.canManageScope} />
+        <section className="card empty-state">
+          <h2>No frameworks selected yet</h2>
+          <p>Choose which frameworks apply to {org.name} to build its unified requirements list.</p>
+          <Link className="btn btn-primary" href={`/orgs/${orgId}/frameworks`}>Choose frameworks</Link>
+        </section>
+      </>
+    );
+  }
+
+  const s = d.status;
+  const applicable = d.total - s.not_applicable;
+  const assessed = d.total - s.not_assessed;
+  const gaps = s.not_implemented + s.partially_implemented;
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <p className="muted small"><Link href="/">Organisations</Link> /</p>
-          <h1>{org.name}</h1>
-          <p className="muted">Your access: {role ? ROLE_LABELS[role] : "Platform owner"}</p>
-        </div>
-        {canManage && <Link href={`/orgs/${orgId}/members`} className="btn btn-primary">Manage members</Link>}
-      </header>
+      <OrgTabs orgId={orgId} orgName={org.name} active="overview" showMembers={ctx.canManageScope} />
+      <Disclaimer text={DISCLAIMER} />
 
-      <section className="card">
-        <div className="card-head"><h2>Control assessments</h2><span className="muted small">{assessments.data?.length ?? 0} records</span></div>
-        {assessments.data && assessments.data.length > 0 ? (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>SCF control</th><th>Status</th><th>Owner</th><th>Assessed</th><th>Notes</th></tr></thead>
-              <tbody>
-                {assessments.data.map((a) => {
-                  const control = a.scf_controls as unknown as { scf_control_name: string } | null;
-                  return (
-                    <tr key={a.id}>
-                      <td><Link href={`/controls/${encodeURIComponent(a.scf_id)}`}><code>{a.scf_id}</code></Link> {control?.scf_control_name}</td>
-                      <td><span className={`badge status-${a.status}`}><span className="dot" />{STATUS_LABELS[a.status] ?? a.status}</span></td>
-                      <td>{a.owner_name ?? "—"}</td>
-                      <td>{a.assessed_on ?? "—"}</td>
-                      <td className="notes">{a.notes ?? ""}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="empty">No assessments recorded yet.</p>
-        )}
-        <p className="hint">Assessment editing arrives in a later iteration. Records shown here are protected by organisation-level Row Level Security.</p>
+      <section className="kpis" aria-label="Key figures">
+        <Link className="card kpi" href={req("")}>
+          <span className="kpi-label">Unified requirements</span>
+          <span className="kpi-value">{d.total}</span>
+          <span className="kpi-sub">across {ctx.selected.size} selected framework{ctx.selected.size === 1 ? "" : "s"}</span>
+        </Link>
+        <Link className="card kpi" href={req("status=not_assessed")}>
+          <span className="kpi-label">Assessment progress</span>
+          <span className="kpi-value">{pct(assessed, d.total)}%</span>
+          <span className="kpi-sub">{assessed} assessed · {s.not_assessed} still to assess</span>
+        </Link>
+        <Link className="card kpi kpi-warn" href={req("status=gaps")}>
+          <span className="kpi-label">Open gaps</span>
+          <span className="kpi-value">{gaps}</span>
+          <span className="kpi-sub">{s.not_implemented} not implemented · {s.partially_implemented} partial</span>
+        </Link>
+        <Link className="card kpi" href={req("evidence=missing")}>
+          <span className="kpi-label">Evidence still missing</span>
+          <span className="kpi-value">{d.evidence.not_provided + d.evidence.partially_provided}</span>
+          <span className="kpi-sub">of {d.evidence.needs_evidence} implemented or partial requirements</span>
+        </Link>
       </section>
 
-      <div className="grid-2">
-        <section className="card">
-          <div className="card-head"><h2>Members</h2><span className="muted small">{members.data?.length ?? 0}</span></div>
+      <section className="card">
+        <div className="card-head"><h2>Assessment status</h2><span className="muted small">{applicable} applicable · {s.not_applicable} marked not applicable</span></div>
+        <div className="stacked stacked-lg" role="img" aria-label="Assessment status breakdown">
+          {SEGMENTS.filter(([k]) => s[k] > 0).map(([k, label]) => (
+            <span key={k} className={`seg status-${k}`} style={{ flex: s[k] }} title={`${label}: ${s[k]}`} />
+          ))}
+        </div>
+        <ul className="legend">
+          {SEGMENTS.map(([k, label]) => (
+            <li key={k}><Link href={req(`status=${k}`)}><span className={`dot status-${k}`} />{label} <strong>{s[k]}</strong></Link></li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h2>Evidence</h2><span className="muted small">Tracked separately: “Implemented” does not mean evidence has been provided</span></div>
+        <div className="evidence-grid">
+          <div><span className="kpi-value small-value">{d.evidence.provided}</span><span className="muted small">Evidence provided</span></div>
+          <div><span className="kpi-value small-value">{d.evidence.partially_provided}</span><span className="muted small">Partially provided</span></div>
+          <div><span className="kpi-value small-value warn">{d.evidence.not_provided}</span><span className="muted small">Not provided</span></div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h2>By framework</h2><span className="muted small">A requirement shared by several frameworks counts once in each</span></div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Framework</th><th className="num">Requirements</th><th className="num">Assessed</th><th className="num">Gaps</th><th className="num">Evidence missing</th><th>Progress</th></tr></thead>
+            <tbody>
+              {d.groups.map((g) => {
+                const done = g.total - g.not_assessed;
+                return (
+                  <tr key={g.group_id}>
+                    <td><Link href={req(`fw=${g.group_id}`)}>{groupById.get(g.group_id)?.name ?? g.group_id}</Link></td>
+                    <td className="num">{g.total}</td>
+                    <td className="num">{done}</td>
+                    <td className="num"><Link href={req(`fw=${g.group_id}&status=gaps`)}>{g.not_implemented + g.partial}</Link></td>
+                    <td className="num"><Link href={req(`fw=${g.group_id}&evidence=missing`)}>{g.evidence_missing}</Link></td>
+                    <td className="bar-cell"><div className="meter" role="img" aria-label={`${pct(done, g.total)}% assessed`}><span style={{ width: `${pct(done, g.total)}%` }} /></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">{d.framework_specific} requirement{d.framework_specific === 1 ? " is" : "s are"} framework-specific (the SCF maps {d.framework_specific === 1 ? "it" : "them"} to only one of the eight frameworks). <Link href={req("specific=1")}>Show them</Link>.</p>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h2>Recently updated</h2></div>
+        {recent && recent.length > 0 ? (
           <ul className="member-list">
-            {(members.data ?? []).map((m) => {
-              const profile = m.profiles as unknown as { email: string; full_name: string | null } | null;
+            {recent.map((r) => {
+              const control = r.scf_controls as unknown as { scf_control_name: string } | null;
               return (
-                <li key={m.id}>
-                  <span><strong>{profile?.full_name ?? profile?.email}</strong><span className="muted small">{profile?.email}</span></span>
-                  <span className="pill">{ROLE_LABELS[m.role as OrgRole]}</span>
+                <li key={r.scf_id}>
+                  <Link href={`/orgs/${orgId}/requirements/${encodeURIComponent(r.scf_id)}`}><code>{r.scf_id}</code> {control?.scf_control_name}</Link>
+                  <span className="muted small">{new Date(r.updated_at).toLocaleDateString("en-GB")}</span>
                 </li>
               );
             })}
           </ul>
-        </section>
-        <section className="card">
-          <div className="card-head"><h2>Evidence records</h2><span className="muted small">Private storage</span></div>
-          {evidence.data && evidence.data.length > 0 ? (
-            <ul className="member-list">
-              {evidence.data.map((e) => (
-                <li key={e.id}><span><strong>{e.title}</strong><span className="muted small">{e.storage_path ?? "No file"}</span></span></li>
-              ))}
-            </ul>
-          ) : (
-            <p className="empty">No evidence recorded yet.</p>
-          )}
-        </section>
-      </div>
+        ) : <p className="empty">No assessments recorded yet.</p>}
+      </section>
     </>
   );
 }

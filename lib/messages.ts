@@ -16,6 +16,17 @@ export const MESSAGES = {
   "member-failed": { tone: "error", text: "That change was not allowed." },
   "member-updated": { tone: "success", text: "Role updated." },
   "member-removed": { tone: "success", text: "Member removed." },
+  "scope-saved": { tone: "success", text: "Framework scope saved." },
+  "scope-failed": { tone: "error", text: "The framework scope could not be changed. Only customer admins and platform owners can do this." },
+  "assessment-saved": { tone: "success", text: "Assessment saved." },
+  "assessment-failed": { tone: "error", text: "The assessment could not be saved. You may not have permission." },
+  "evidence-added": { tone: "success", text: "Evidence record added." },
+  "evidence-failed": { tone: "error", text: "The evidence could not be saved. Check the title and file (max 10 MB) and your permissions." },
+  "evidence-removed": { tone: "success", text: "Evidence record removed." },
+  "guidance-saved": { tone: "success", text: "Guidance saved." },
+  "guidance-failed": { tone: "error", text: "Guidance could not be saved. Only platform owners can edit it." },
+  "review-saved": { tone: "success", text: "Mapping review recorded." },
+  "review-failed": { tone: "error", text: "The mapping review could not be recorded." },
   "rate-limited": { tone: "error", text: "Too many attempts. Wait a moment and try again." }
 } as const;
 

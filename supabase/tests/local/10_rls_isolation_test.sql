@@ -228,6 +228,105 @@ select test.check('anon cannot list files', test.try('select * from storage.obje
 select test.check('anon cannot call member RPC', test.try(format($$select public.add_organisation_member(%L, 'x@y.test', 'assessor')$$, :nw)), 'err:42501');
 reset role;
 
+
+-- =====================================================================
+-- Compliance workflow (migration 0004)
+-- =====================================================================
+reset role;
+insert into public.scf_framework_groups (id, name, source_names, sort_order) values
+  ('iso27001', 'ISO/IEC 27001', '{"ISO 27001 2022"}', 2),
+  ('gdpr', 'GDPR', '{"EMEA EU GDPR 2016"}', 3);
+insert into public.scf_controls (scf_id, library_version, scf_domain, scf_domain_identifier, scf_control_name, description, control_question, sort_order) values
+  ('PRI-01', '2026.3', 'Data Privacy', 'PRI', 'Fixture control C', 'Fixture description', 'Fixture question?', 3);
+insert into public.scf_mappings (scf_id, group_id, framework, focal_document_identifier, focal_document_name, ids, sort_order) values
+  ('GOV-02', 'nis2', 'EMEA EU NIS2 2022', 'fixture', 'Fixture doc', '{"Article 21.1"}', 0),
+  ('GOV-02', 'iso27001', 'ISO 27001 2022', 'fixture', 'Fixture doc', '{"5.1"}', 1),
+  ('IAC-37', 'nis2', 'EMEA EU NIS2 2022', 'fixture', 'Fixture doc', '{"Article 21.2(j)"}', 0),
+  ('PRI-01', 'gdpr', 'EMEA EU GDPR 2016', 'fixture', 'Fixture doc', '{"Article 5"}', 0);
+insert into public.organisation_frameworks (organisation_id, group_id) values
+  (:nw, 'nis2'), (:nw, 'iso27001'), (:bw, 'gdpr');
+insert into public.requirement_guidance (scf_id, plain_summary, status) values
+  ('GOV-02', 'Fixture draft summary', 'draft'),
+  ('IAC-37', 'Fixture reviewed summary', 'reviewed');
+insert into public.framework_notes (scf_id, group_id, note, status) values
+  ('GOV-02', 'nis2', 'Fixture draft note', 'draft');
+insert into public.mapping_reviews (scf_id, framework, status, reviewed_ids) values
+  ('GOV-02', 'EMEA EU NIS2 2022', 'reviewed', '{"Article 21.1"}');
+
+select test.check('stamp: reviewed guidance gets reviewed_at', (select (reviewed_at is not null)::text from public.requirement_guidance where scf_id = 'IAC-37'), 'true');
+select test.check('stamp: draft guidance has no reviewer', (select (reviewed_at is null)::text from public.requirement_guidance where scf_id = 'GOV-02'), 'true');
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a1","role":"authenticated"}', false);
+select test.check('nw_admin: unified requirements for selected frameworks', test.try(format('select * from public.org_requirements(%L)', :nw)), 'ok:2');
+select test.check('nw_admin: shared requirement appears once with both frameworks',
+  (select selected_count::text from public.org_requirements(:nw) where scf_id = 'GOV-02'), '2');
+select test.check('nw_admin: unified row carries own assessment status',
+  (select status::text from public.org_requirements(:nw) where scf_id = 'GOV-02'), 'partially_implemented');
+select test.check('nw_admin: unassessed requirement shows not_assessed',
+  (select status::text || '/' || evidence_status::text from public.org_requirements(:nw) where scf_id = 'IAC-37'), 'not_assessed/not_provided');
+select test.check('nw_admin: framework-specific flag from SCF mappings',
+  (select all_group_count::text from public.org_requirements(:nw) where scf_id = 'IAC-37'), '1');
+select test.check('nw_admin: cannot list Brightwater requirements', test.try(format('select * from public.org_requirements(%L)', :bw)), 'ok:0');
+select test.check('nw_admin: Brightwater dashboard is empty', (public.org_dashboard(:bw) ->> 'total'), '0');
+select test.check('nw_admin: dashboard total', (public.org_dashboard(:nw) ->> 'total'), '2');
+select test.check('nw_admin: dashboard evidence missing counts implemented/partial only',
+  (public.org_dashboard(:nw) -> 'evidence' ->> 'not_provided'), '1');
+select test.check('nw_admin: dashboard per-framework rows', (jsonb_array_length(public.org_dashboard(:nw) -> 'groups'))::text, '2');
+select test.check('nw_admin: can add a framework to own scope', test.try(format($$insert into public.organisation_frameworks (organisation_id, group_id) values (%L, 'gdpr')$$, :nw)), 'ok:1');
+select test.check('nw_admin: cannot change Brightwater scope', test.try(format($$insert into public.organisation_frameworks (organisation_id, group_id) values (%L, 'nis2')$$, :bw)), 'err:42501');
+select test.check('nw_admin: cannot see Brightwater scope', test.try(format('select * from public.organisation_frameworks where organisation_id = %L', :bw)), 'ok:0');
+select test.check('nw_admin: sees only reviewed guidance', test.try('select * from public.requirement_guidance'), 'ok:1');
+select test.check('nw_admin: cannot see draft framework notes', test.try('select * from public.framework_notes'), 'ok:0');
+select test.check('nw_admin: can see mapping review status', test.try('select * from public.mapping_reviews'), 'ok:1');
+select test.check('nw_admin: cannot write guidance', test.try($$insert into public.requirement_guidance (scf_id, plain_summary) values ('PRI-01', 'x')$$), 'err:42501');
+select test.check('nw_admin: cannot edit reviewed guidance', test.try($$update public.requirement_guidance set plain_summary = 'x'$$), 'ok:0');
+select test.check('nw_admin: cannot write mapping reviews', test.try($$insert into public.mapping_reviews (scf_id, framework, status, reviewed_ids) values ('IAC-37', 'EMEA EU NIS2 2022', 'reviewed', '{}')$$), 'err:42501');
+select test.check('nw_admin: cannot write framework notes', test.try($$insert into public.framework_notes (scf_id, group_id, note) values ('IAC-37', 'nis2', 'x')$$), 'err:42501');
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a2","role":"authenticated"}', false);
+select test.check('nw_assessor: cannot change framework scope', test.try(format($$insert into public.organisation_frameworks (organisation_id, group_id) values (%L, 'gdpr')$$, :nw)), 'err:42501');
+select test.check('nw_assessor: can set evidence status', test.try(format($$update public.control_assessments set evidence_status = 'provided' where id = %L$$, :nw_assess)), 'ok:1');
+select test.check('nw_assessor: updated_by comes from the session',
+  test.try(format($$with u as (update public.control_assessments set evidence_status = 'partially_provided' where id = %L returning updated_by) select 1 from u where updated_by = %L$$, :nw_assess, :nw_assessor)), 'ok:1');
+select test.check('nw_assessor: cannot set evidence status in Brightwater', test.try(format($$update public.control_assessments set evidence_status = 'provided' where id = %L$$, :bw_assess)), 'ok:0');
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a3","role":"authenticated"}', false);
+select test.check('nw_viewer: cannot set evidence status', test.try(format($$update public.control_assessments set evidence_status = 'provided' where id = %L$$, :nw_assess)), 'ok:0');
+select test.check('nw_viewer: cannot remove frameworks', test.try(format('delete from public.organisation_frameworks where organisation_id = %L', :nw)), 'ok:0');
+select test.check('nw_viewer: can read unified requirements', test.try(format('select * from public.org_requirements(%L)', :nw)), 'ok:2');
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000b1","role":"authenticated"}', false);
+select test.check('bw_admin: own scope only (GDPR)', test.try(format('select * from public.org_requirements(%L)', :bw)), 'ok:1');
+select test.check('bw_admin: out-of-scope assessment not listed', test.try(format($$select * from public.org_requirements(%L) where scf_id = 'GOV-02'$$, :bw)), 'ok:0');
+select test.check('bw_admin: cannot list Northwind requirements', test.try(format('select * from public.org_requirements(%L)', :nw)), 'ok:0');
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a0","role":"authenticated"}', false);
+select test.check('platform owner: sees draft and reviewed guidance', test.try('select * from public.requirement_guidance'), 'ok:2');
+select test.check('platform owner: can write guidance', test.try($$insert into public.requirement_guidance (scf_id, plain_summary) values ('PRI-01', 'x')$$), 'ok:1');
+select test.check('platform owner: review stamp comes from the session',
+  test.try($$with u as (update public.requirement_guidance set status = 'reviewed' where scf_id = 'GOV-02' returning reviewed_by) select 1 from u where reviewed_by = '00000000-0000-4000-8000-0000000000a0'$$), 'ok:1');
+select test.check('platform owner: editing content resets authorship',
+  test.try($$with u as (update public.requirement_guidance set plain_summary = 'y' where scf_id = 'IAC-37' returning authored_by) select 1 from u where authored_by = '00000000-0000-4000-8000-0000000000a0'$$), 'ok:1');
+select test.check('platform owner: can record a mapping review', test.try($$insert into public.mapping_reviews (scf_id, framework, status, reviewed_ids) values ('IAC-37', 'EMEA EU NIS2 2022', 'needs_validation', '{"Article 21.2(j)"}')$$), 'ok:1');
+select test.check('platform owner: sees every organisation requirements', test.try(format('select * from public.org_requirements(%L)', :bw)), 'ok:1');
+
+reset role;
+set role anon;
+select set_config('request.jwt.claims', '', false);
+select test.check('anon: cannot call org_requirements', test.try(format('select * from public.org_requirements(%L)', :nw)), 'err:42501');
+select test.check('anon: cannot read guidance', test.try('select * from public.requirement_guidance'), 'err:42501');
+reset role;
+
 \o
 -- ---------------------------------------------------------------------
 -- Report

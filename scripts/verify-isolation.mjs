@@ -80,6 +80,17 @@ async function crossTenantChecks(label, client, ownOrg, otherOrg) {
     .upload(`${otherOrg}/cross-tenant.txt`, new Blob(["x"], { type: "text/plain" }), { upsert: true });
   check(`${label}: cannot upload into other org's folder`, Boolean(upload.error));
 
+  check(`${label}: cannot read other org's framework scope`,
+    denied(await client.from("organisation_frameworks").select("group_id").eq("organisation_id", otherOrg)));
+  const scope = await client.from("organisation_frameworks").insert({ organisation_id: otherOrg, group_id: "eu_ai_act" }).select();
+  check(`${label}: cannot change other org's framework scope`, Boolean(scope.error), scope.error?.code);
+  check(`${label}: other org's unified requirements are empty`,
+    denied(await client.rpc("org_requirements", { p_organisation_id: otherOrg }).limit(5)));
+  const otherDash = await client.rpc("org_dashboard", { p_organisation_id: otherOrg });
+  check(`${label}: other org's dashboard shows nothing`, !otherDash.error && otherDash.data?.total === 0, JSON.stringify(otherDash.data?.total));
+  const ownReq = await client.rpc("org_requirements", { p_organisation_id: ownOrg }).limit(5);
+  check(`${label}: sees its own unified requirements`, !ownReq.error && ownReq.data?.length > 0);
+
   const ownFile = await client.storage.from("evidence").download(`${ownOrg}/fictional-policy.txt`);
   check(`${label}: can download its own file`, !ownFile.error);
 }
@@ -99,6 +110,17 @@ check("assessor cannot delete records",
   denied(await assessor.from("control_assessments").delete().eq("organisation_id", NW).select()));
 const assessorRpc = await assessor.rpc("add_organisation_member", { p_organisation_id: NW, p_email: "admin@brightwater.test", p_role: "assessor" });
 check("assessor cannot add members", Boolean(assessorRpc.error), assessorRpc.error?.code);
+
+const viewerScope = await viewer.from("organisation_frameworks").delete().eq("organisation_id", NW).select();
+check("read-only user cannot change framework scope", denied(viewerScope));
+const assessorScope = await assessor.from("organisation_frameworks").insert({ organisation_id: NW, group_id: "eu_ai_act" }).select();
+check("assessor cannot change framework scope", Boolean(assessorScope.error), assessorScope.error?.code);
+
+// DATADEFENZ guidance is written by platform owners only.
+const guidanceWrite = await assessor.from("requirement_guidance").insert({ scf_id: "GOV-02", plain_summary: "x" }).select();
+check("customers cannot write DATADEFENZ guidance", Boolean(guidanceWrite.error), guidanceWrite.error?.code);
+const reviewWrite = await assessor.from("mapping_reviews").insert({ scf_id: "GOV-02", framework: "x", status: "reviewed", reviewed_ids: [] }).select();
+check("customers cannot mark mappings reviewed", Boolean(reviewWrite.error), reviewWrite.error?.code);
 
 // Shared SCF library: readable, never writable.
 const scfCount = await assessor.from("scf_controls").select("*", { count: "exact", head: true });

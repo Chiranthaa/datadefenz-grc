@@ -19,8 +19,18 @@ Internal GRC platform for DATADEFENZ consulting work.
 - **Shared SCF 2026.3 control library** — read-only for everyone, loaded
   verbatim from `data/scf/scf-2026.3-eight-frameworks.json`, with SCF
   attribution and license links on every signed-in page.
-- Minimal screens: organisations, organisation detail, member management,
-  platform admin (create organisations), SCF library browser.
+- **Compliance workflow** — per-customer framework selection, one unified
+  requirements list (shared requirements appear once), exact framework
+  references with provenance (sourced / reviewed / needs validation),
+  assessment status, separately tracked evidence with private file storage,
+  filters and a dashboard. See [docs/COMPLIANCE-WORKFLOW.md](docs/COMPLIANCE-WORKFLOW.md).
+- **DATADEFENZ guidance layer** — platform owners write plain-language
+  summaries, implementation guidance, technical references, expected and
+  example evidence, framework-specific notes and mapping reviews; customers
+  see reviewed content only.
+- Screens: organisations, organisation dashboard, requirements, requirement
+  detail, frameworks, members, platform admin, SCF library (with the
+  consultant editor for platform owners).
 
 ## Getting started
 
@@ -46,11 +56,12 @@ app/                         Next.js App Router pages, server actions, auth rout
 components/                  Shared UI (notices, submit button, SCF attribution)
 lib/                         Supabase clients, auth helpers, env, messages
 proxy.ts                     Session refresh + redirect to /login (Next.js 16 proxy)
-supabase/migrations/         Database schema, RLS policies, storage bucket
+supabase/migrations/         Database schema, RLS policies, storage bucket, workflow read models
+supabase/config.toml         Supabase CLI config for local development (no secrets)
 supabase/tests/local/        RLS isolation tests on a throwaway local PostgreSQL
 scripts/                     Local-only tools: SCF import, test seed, isolation check
 data/scf/                    SCF 2026.3 source file (unmodified)
-docs/                        Setup guide and security model
+docs/                        Setup guide, security model, compliance workflow and data provenance
 prototype/                   Earlier static prototype (demo values only), kept for reference
 ```
 

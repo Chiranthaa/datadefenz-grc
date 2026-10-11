@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Notice } from "@/components/Notice";
+import { OrgTabs } from "@/components/OrgTabs";
 import { SubmitButton } from "@/components/SubmitButton";
 import { isPlatformOwner, requireUser, roleIn, ROLE_LABELS, UUID_RE, type OrgRole } from "@/lib/auth";
 import { addMember, changeRole, removeMember } from "./actions";
@@ -30,13 +30,7 @@ export default async function MembersPage({ params, searchParams }: {
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <p className="muted small"><Link href="/">Organisations</Link> / <Link href={`/orgs/${orgId}`}>{org.name}</Link> /</p>
-          <h1>Members</h1>
-          <p className="muted">Add existing user accounts to this organisation and set their role.</p>
-        </div>
-      </header>
+      <OrgTabs orgId={orgId} orgName={org.name} active="members" showMembers />
       <Notice code={query.message} />
 
       <section className="card">

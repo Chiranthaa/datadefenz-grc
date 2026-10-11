@@ -25,6 +25,11 @@
 | Delete evidence files | ✓ | ✓ | – | – |
 | Add members, change roles, remove members | ✓ | ✓ | – | – |
 | Rename organisation | ✓ | ✓ | – | – |
+| Choose frameworks in scope | ✓ | ✓ | – | – |
+| Set evidence status, add evidence records | ✓ | ✓ | ✓ | – |
+| Write DATADEFENZ guidance, framework notes, mapping reviews | ✓ | – | – | – |
+| Read reviewed guidance and mapping review status | ✓ | ✓ | ✓ | ✓ |
+| Read draft guidance | ✓ | – | – | – |
 | Create / delete organisations | ✓ | – | – | – |
 | Read SCF library | ✓ | ✓ | ✓ | ✓ |
 | Change SCF library | – | – | – | – |
@@ -48,6 +53,11 @@ A user can belong to several organisations with a different role in each.
 - **Private Storage.** The `evidence` bucket is private. Objects must be
   stored under `<organisation_id>/…`; storage policies apply the same
   membership and role rules to files.
+- **Workflow read models** (`org_requirements`, `org_dashboard`) are
+  `SECURITY INVOKER` functions, so they return nothing for organisations the
+  caller is not a member of.
+- **DATADEFENZ guidance** is shared across customers but writable only by
+  platform owners; drafts are visible only to platform owners.
 - **Anonymous visitors** have no table privileges at all.
 - **Sessions** are cookie-based (`@supabase/ssr`). `proxy.ts` refreshes and
   validates them on every request and sends unauthenticated users to the
@@ -64,7 +74,7 @@ A user can belong to several organisations with a different role in each.
 
 `npm run test:rls-local` builds a throwaway PostgreSQL cluster, applies
 small stand-ins for Supabase's `auth` and `storage` schemas, applies the
-migrations, and runs 81 checks across all roles in
+migrations, and runs 121 checks across all roles in
 `supabase/tests/local/10_rls_isolation_test.sql`. Needs PostgreSQL 15+
 installed locally. Mutating a policy (for example making assessments
 readable by everyone) makes the suite fail, which shows the tests have
@@ -81,6 +91,9 @@ exactly as a browser would, and checks that:
   assessments, evidence records or memberships;
 - neither can list, download or upload the other's evidence files;
 - neither can add members to the other organisation;
+- neither can read or change the other's framework scope, unified
+  requirements or dashboard figures;
+- customers cannot write DATADEFENZ guidance or mark mappings reviewed;
 - read-only users cannot write, assessors cannot delete or manage members;
 - the SCF library is readable but not editable, even by a platform owner;
 - platform ownership cannot be granted through the API;

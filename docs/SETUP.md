@@ -55,6 +55,7 @@ order:
 1. `20261011090000_core_tenancy.sql` — organisations, profiles, memberships, roles, RLS
 2. `20261011090100_scf_library.sql` — shared read-only SCF library
 3. `20261011090200_customer_records.sql` — assessments, evidence, private `evidence` bucket
+4. `20261011120000_compliance_workflow.sql` — framework scope, evidence status, DATADEFENZ guidance, mapping reviews, unified requirements and dashboard functions
 
 **Option A — SQL editor (simplest).** Open *SQL Editor* in the dashboard and
 run each file's full contents, in the order above.
@@ -67,6 +68,9 @@ npx supabase init          # only if prompted; keeps the existing migrations
 npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
+
+`supabase/config.toml` holds local CLI defaults (sign-up disabled, 12-character
+minimum password, localhost redirect). It contains no secrets.
 
 Then check **Project Settings → Data API → Exposed schemas** lists only
 `public` (and `graphql_public`). Do **not** expose the `private` schema.
@@ -96,6 +100,11 @@ npm run seed:test         # fictional users, 2 organisations, sample records and
 npm run verify:isolation  # cross-organisation checks against your project
 npm run dev               # http://localhost:3000
 ```
+
+Then sign in as `admin@northwind.test`, open **Northwind Process Industries
+(TEST)** and use the Dashboard, Requirements and Frameworks tabs. Sign in as
+`platform.owner@datadefenz.test` and open any control in **SCF library** to
+write guidance or review mappings.
 
 ## 5. Fictional test accounts
 

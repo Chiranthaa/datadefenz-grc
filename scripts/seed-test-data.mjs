@@ -63,6 +63,18 @@ for (const u of TEST_USERS) {
   }
 }
 
+// --- framework scope (fictional choices) ------------------------------------
+const SCOPES = {
+  "northwind-test": ["iso27001", "iec62443", "nist80082", "nis2"],
+  "brightwater-test": ["iso27001", "nis2", "gdpr", "soc2"]
+};
+for (const [slug, groupIds] of Object.entries(SCOPES)) {
+  must(await db.from("organisation_frameworks").upsert(
+    groupIds.map((group_id) => ({ organisation_id: orgId[slug], group_id })),
+    { onConflict: "organisation_id,group_id" }
+  ), `Framework scope ${slug}`);
+}
+
 // --- fictional assessment and evidence records -----------------------------
 const { count } = await db.from("scf_controls").select("*", { count: "exact", head: true });
 if (!count) {
@@ -72,22 +84,23 @@ if (!count) {
 
 const SAMPLES = {
   "northwind-test": [
-    ["IAC-37", "partially_implemented", "Test IAM Lead", "FICTIONAL: MFA enforced for VPN; OT jump host pending."],
-    ["NET-06", "partially_implemented", "Test OT Engineer", "FICTIONAL: OT DMZ exists; broad rules between levels 2 and 3."],
-    ["BCD-24", "implemented", "Test IT Ops Lead", "FICTIONAL: Immutable backups with quarterly restore tests."]
+    ["IAC-37", "partially_implemented", "partially_provided", "Test IAM Lead", "FICTIONAL: MFA enforced for VPN; OT jump host pending."],
+    ["NET-06", "partially_implemented", "not_provided", "Test OT Engineer", "FICTIONAL: OT DMZ exists; broad rules between levels 2 and 3."],
+    ["BCD-24", "implemented", "provided", "Test IT Ops Lead", "FICTIONAL: Immutable backups with quarterly restore tests."],
+    ["GOV-02", "implemented", "not_provided", "Test CISO", "FICTIONAL: Programme charter approved; evidence still to be collected."]
   ],
   "brightwater-test": [
-    ["IAC-37", "implemented", "Test Security Manager", "FICTIONAL: MFA enforced for all remote and privileged access."],
-    ["IRO-08", "not_implemented", "Test CISO", "FICTIONAL: Incident response plan not yet drafted."],
-    ["TPM-10", "partially_implemented", "Test Procurement Lead", "FICTIONAL: Supplier risk reviews for SaaS only."]
+    ["IAC-37", "implemented", "provided", "Test Security Manager", "FICTIONAL: MFA enforced for all remote and privileged access."],
+    ["IRO-08", "not_implemented", "not_provided", "Test CISO", "FICTIONAL: Incident response plan not yet drafted."],
+    ["TPM-10", "partially_implemented", "partially_provided", "Test Procurement Lead", "FICTIONAL: Supplier risk reviews for SaaS only."]
   ]
 };
 
 for (const [slug, rows] of Object.entries(SAMPLES)) {
   const org = orgId[slug];
   const assessments = must(await db.from("control_assessments").upsert(
-    rows.map(([scf_id, status, owner_name, notes]) => ({
-      organisation_id: org, scf_id, status, owner_name, notes, assessed_on: "2026-09-15"
+    rows.map(([scf_id, status, evidence_status, owner_name, notes]) => ({
+      organisation_id: org, scf_id, status, evidence_status, owner_name, notes, assessed_on: "2026-09-15"
     })),
     { onConflict: "organisation_id,scf_id" }
   ).select("id, scf_id"), `Assessments ${slug}`);
