@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DATADEFENZ GRC — Prototype</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">DD</span>
+        <span class="brand-text">
+          <strong>DATADEFENZ</strong>
+          <small>GRC Platform</small>
+        </span>
+      </div>
+      <nav class="nav" aria-label="Main">
+        <a href="#/dashboard" data-route="dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>
+          Dashboard
+        </a>
+        <a href="#/controls" data-route="controls">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3Z"/></svg>
+          Controls
+        </a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="pill pill-proto">Prototype</span>
+        <p>Internal use only. No login, no customer data.</p>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="sample-banner" role="note">
+        <strong>Demo values</strong>
+        <span>Controls and framework mappings are shown verbatim from the Secure Controls Framework.
+          Assessment status, owners and evidence are invented demo values for a fictional engagement.</span>
+      </div>
+      <main id="view" tabindex="-1"><p class="muted">Loading SCF controls…</p></main>
+      <footer class="attribution" id="attribution">
+        Control content: <a href="https://securecontrolsframework.com" rel="noopener">Secure Controls Framework (SCF)</a>,
+        licensed under <a href="https://creativecommons.org/licenses/by-nd/4.0/" rel="noopener">CC BY-ND 4.0</a>.
+        See also the <a href="https://securecontrolsframework.com/commercial-license" rel="noopener">SCF license terms</a>.
+      </footer>
+    </div>
+  </div>
+
+  <script src="assets/js/demo-assessment.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
